@@ -40,7 +40,15 @@ A $20 bankroll goes to about $0.20 in the first week under every configuration t
 2. **The opening quotes are no longer stale.** The article's "sniper" profited from poorly priced 100-lot opening quotes. Now, when the model disagrees with the opening quote, the quote is usually right: the hit rate is well below the price paid.
 3. **Fees.** With 1–10 contract orders, Kalshi's fee is rounded up to the cent and costs 1–2¢ per contract. That is as large as any edge the model found.
 
+## Counterfactual: real-time data (zero lag)
+I re-ran the backtest as if the minute index were available with no delay (`MINUTE_LAG=0`, `METAR_LAG=1`). That is the best a live Synoptic feed could give.
+
+- Model Brier improved only a little: 0.186 to 0.163 at S−15, against the market's 0.119.
+- All 18 timing × threshold configurations still lost 1.5–14¢ per contract after fees.
+
+So the lag is not the main problem. The market maker's forecast of the remaining minutes is simply better.
+
 ## What might change the result
-- A real-time one-minute ASOS feed, such as a Synoptic API token, to close the 6-minute gap.
+- Per-station one-minute readings (`detailed=true` on the index endpoint), so the model can see individual stations moving before the index does.
 - Acting as a resting maker instead of a taker, which avoids the spread and taker fees but needs real order placement.
 - HRRR/NBM features. Open-Meteo was rate-limited from this environment.
