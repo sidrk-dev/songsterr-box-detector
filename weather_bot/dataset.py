@@ -34,7 +34,9 @@ def build(decision_offsets_min=(54,), cities=None):
     for city in cities or CITIES:
         mk = json.loads((DATA / f"settled_{city}.json").read_text())
         idx = index_series(mk)
-        st = CityState(city, idx, metars)
+        mf = DATA / f"minute_{city}.parquet"
+        minute = pd.read_parquet(mf).v if mf.exists() else None
+        st = CityState(city, idx, metars, minute)
         by_ev = {}
         for m in mk:
             by_ev.setdefault(m["event_ticker"], []).append(m)

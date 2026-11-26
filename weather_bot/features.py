@@ -14,6 +14,7 @@ from config import CITIES
 
 METAR_LAG = pd.Timedelta(minutes=3)      # assumed publication latency of a METAR
 INDEX_LAG = pd.Timedelta(minutes=6)      # index value for hour H usable from H+6min
+MINUTE_LAG = pd.Timedelta(minutes=6)     # minute index point for t usable from t+6min (observed ~5-6)
 
 _T_GROUP = re.compile(r"\bT([01])(\d{3})([01])(\d{3})\b")
 _TD_MAIN = re.compile(r"\s(M?\d{2})/(M?\d{2})?\s")
@@ -86,10 +87,11 @@ CITY_ID = {c: i for i, c in enumerate(CITIES)}
 class CityState:
     """Holds per-city history (index series + METARs) and builds feature rows."""
 
-    def __init__(self, city: str, index: pd.Series, metars: pd.DataFrame):
+    def __init__(self, city: str, index: pd.Series, metars: pd.DataFrame, minute: pd.Series | None = None):
         self.city = city
         self.cfg = CITIES[city]
         self.index = index.sort_index()            # UTC hour -> index °F
+        self.minute = minute.sort_index() if minute is not None and len(minute) else None
         st = list(self.cfg["stations"])
         self.m = {s: g.set_index("valid").sort_index() for s, g in metars[metars.station.isin(st)].groupby("station")}
 
@@ -135,14 +137,34 @@ class CityState:
         i0 = self.idx_at(last, D)
         if not np.isfinite(i0):
             return None
+        i_hour = i0
         lead_min = (S - last).total_seconds() / 60
-        f = dict(city=CITY_ID[self.city], lead=lead_min, i0=i0)
+        mf = {}
+        if self.minute is not None:
+            # minute index points are published ~5 min after their event minute
+            w = self.minute.loc[D - pd.Timedelta(minutes=90): D - MINUTE_LAG]
+            if len(w) == 0 or (D - w.index[-1]) > pd.Timedelta(minutes=20):
+                return None
+            t_now, i0 = w.index[-1], float(w.iloc[-1])
+            lead_min = (S - t_now).total_seconds() / 60
+            for k in (5, 15, 30, 60):
+                prev = w.loc[:t_now - pd.Timedelta(minutes=k)]
+                mf[f"slope{k}"] = i0 - float(prev.iloc[-1]) if len(prev) else np.nan
+            last15 = w.loc[t_now - pd.Timedelta(minutes=15):]
+            mf["vol15"] = float(last15.diff().abs().sum())
+            mf["i_minus_hour"] = i0 - i_hour
+        f = dict(city=CITY_ID[self.city], lead=lead_min, i0=i0, **mf)
         for k in (1, 2, 3, 6):
-            f[f"di{k}"] = i0 - self.idx_at(last - k * H, D)
+            f[f"di{k}"] = i_hour - self.idx_at(last - k * H, D)
         # same hour yesterday: realised change from (S-24h - lead) to S-24h
         y1, y0 = self.idx_at(S - 24 * H, D), self.idx_at(last - 24 * H, D)
         f["yday_delta"] = y1 - y0
         f["yday_level"] = y1 - i0
+        if self.minute is not None:
+            # yesterday's realised change over the same remaining lead
+            ys = self.minute.get(S - 24 * H, np.nan)
+            yb = self.minute.loc[:S - 24 * H - pd.Timedelta(minutes=lead_min)]
+            f["yday_delta_m"] = ys - float(yb.iloc[-1]) if len(yb) else np.nan
         m_now = self.metar_snapshot(D - METAR_LAG)
         m_prev = self.metar_snapshot(D - METAR_LAG - H)
         if m_now is None:
@@ -172,5 +194,7 @@ def rung_rows(feat: dict, strikes) -> pd.DataFrame:
     for x in strikes:
         r = dict(feat)
         r["k"] = x - feat["i0"]          # how far the index must move to exceed strike
+        # strike distance in units of typical move over the remaining lead (~0.2°F/sqrt(min))
+        r["kz"] = r["k"] / (0.2 * math.sqrt(max(feat["lead"], 1.0)))
         rows.append(r)
     return pd.DataFrame(rows)

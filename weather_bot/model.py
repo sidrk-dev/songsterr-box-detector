@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-FEATURES = ["k", "city", "lead", "di1", "di2", "di3", "di6", "yday_delta", "yday_level",
+FEATURES = ["k", "kz", "city", "lead", "di1", "di2", "di3", "di6", "yday_delta", "yday_level",
             "metar_minus_i0", "metar_age", "metar_trend", "m_spread", "m_n", "m_dewdep", "m_wind",
-            "m_sky", "m_ceil", "m_precip", "sky_trend", "sun_s", "sun_d", "hour_sin", "hour_cos", "doy_sin"]
+            "m_sky", "m_ceil", "m_precip", "sky_trend", "sun_s", "sun_d", "hour_sin", "hour_cos", "doy_sin",
+            "slope5", "slope15", "slope30", "slope60", "vol15", "i_minus_hour", "yday_delta_m"]
 
-PARAMS = dict(n_estimators=400, max_depth=5, learning_rate=0.04, subsample=0.8,
+PARAMS = dict(n_estimators=700, max_depth=5, learning_rate=0.04, subsample=0.8,
               colsample_bytree=0.8, min_child_weight=20, reg_lambda=2.0,
               objective="binary:logistic", eval_metric="logloss", tree_method="hist", n_jobs=4)
 
@@ -26,7 +27,7 @@ def informative(df, lo=-6, hi=6):
 class LadderModel:
     def __init__(self, **kw):
         p = dict(PARAMS); p.update(kw)
-        mono = tuple(-1 if f == "k" else 0 for f in FEATURES)
+        mono = tuple(-1 if f in ("k", "kz") else 0 for f in FEATURES)
         self.clf = xgb.XGBClassifier(monotone_constraints=mono, **p)
 
     def fit(self, df):
