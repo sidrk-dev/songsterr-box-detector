@@ -48,6 +48,20 @@ I re-ran the backtest as if the minute index were available with no delay (`MINU
 
 So the lag is not the main problem. The market maker's forecast of the remaining minutes is simply better.
 
+## Round 2: everything else tried (none profitable)
+All results are out of sample and after fees.
+
+| Strategy | Data | Result |
+|---|---|---|
+| Buy the favorite late in the hour (favorite–longshot bias) | hourly index, 2,881 events; 20-lot fees | −0.1 to −0.5¢/contract in holdout at every price bucket and every time 3–20 min before settlement |
+| Passive market making, quoting 1¢ better than the best price (`flow.py`, `maker_bt.py`) | public trade tape, 1,300 markets | Makers earn about +0.6¢/contract at their own price. Quoting 1¢ better turns that to −0.4¢. Model-filtered quoting stays negative in most windows (+0.3 to +1¢ only in the last 10 min, on 2 days of data). |
+| Daily-high model (`daily_model.py`): 3 years of METAR + official NWS highs + NBM forecasts (`nbm_feats.py`) | 690 daily events, 10 cities, trained only on data before Sep 15 | Brier worse than the market at every hour, e.g. 0.20 vs 0.16 in the morning and 0.20 vs 0.11 in the afternoon. Trading: −1 to −3¢/contract. The 90% bootstrap confidence interval is below zero or straddles it for every afternoon variant. |
+| Buy the outcome after the NWS climate report is published (`cli_window.py`) | 120 events where the report preceded the close | 0 minutes in which the winning side was offered at or below 97¢. The market reprices within about 2 minutes. |
+
+Why the daily markets also beat the model: the official high comes from continuous (1-minute) sensor data, and the market tracks it in real time. The hourly METAR max underestimates it by 1–2°F on many days. Public 1-minute ASOS data (Iowa Environmental Mesonet) is archived only with a delay, and the live NWS API gives whole-°C readings about 40 minutes late.
+
+There are isolated real mispricings. On Phoenix, Nov 4, the market held the 77–78° bucket at 85% until about 3 p.m. while the temperature sat at 75°F. They are not frequent enough to outweigh the cases where the market knows more.
+
 ## What might change the result
 - Per-station one-minute readings (`detailed=true` on the index endpoint), so the model can see individual stations moving before the index does.
 - Acting as a resting maker instead of a taker, which avoids the spread and taker fees but needs real order placement.
