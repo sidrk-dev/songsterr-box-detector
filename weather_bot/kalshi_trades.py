@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # ticker contains the date (e.g. -26NOV2614-); sort newest first
     def key(t):
         d = t.split("-")[1]
-        return pd.to_datetime(d[:7], format="%y%b%d").value + int(d[7:9])
+        return pd.to_datetime(d[:7], format="%y%b%d").value + int(d[7:9] or 0)
     tks.sort(key=key, reverse=True)
     with ThreadPoolExecutor(3) as ex:
         list(ex.map(fetch, tks))
