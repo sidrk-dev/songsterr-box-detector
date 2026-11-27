@@ -19,32 +19,35 @@ def load_full(stations):
     return d
 
 
-def add_remaining(snap, cities, negate=False):
+def add_remaining(snap, cities, negate=False, nbs=None):
     code = {s: st for s, (st, _) in cities.items()}
     off = {s: STD_OFFSET[tz] for s, (_, tz) in cities.items()}
-    nbs = load_full(set(code.values()))
+    if nbs is None:
+        nbs = load_full(set(code.values()))
     sign = -1.0 if negate else 1.0
     res = []
     for series, g in snap[["series", "date", "hour"]].drop_duplicates().groupby("series"):
         st = code[series]; o = pd.Timedelta(hours=off[series])
         n = nbs[nbs.station == st]
-        runs = np.array(sorted(n.runtime.unique()))
-        by_run = {r: (grp.ftime.values, sign * grp.tmp.values.astype(float)) for r, grp in n.groupby("runtime")}
-        day0 = pd.to_datetime(g.date).dt.tz_localize("UTC") - o        # LST midnight in UTC
+        n = n.assign(runtime=n.runtime.dt.tz_convert(None), ftime=n.ftime.dt.tz_convert(None))
+        runs = np.sort(n.runtime.unique().astype("datetime64[ns]"))
+        by_run = {np.datetime64(r, "ns"): (grp.ftime.values.astype("datetime64[ns]"), sign * grp.tmp.values.astype(float)) for r, grp in n.groupby("runtime")}
+        day0 = pd.to_datetime(g.date) - o        # LST midnight in UTC
         t = day0 + pd.to_timedelta(g.hour, unit="h")
-        t_av = (t - LAT).values
-        end = (day0 + pd.Timedelta(hours=24)).values
+        t_av = (t - LAT).values.astype("datetime64[ns]")
+        end = (day0 + pd.Timedelta(hours=24)).values.astype("datetime64[ns]")
+        tv = t.values.astype("datetime64[ns]")
         idx = np.searchsorted(runs, t_av, side="right") - 1
         rem, nxt, age = [], [], []
         for i, j in enumerate(idx):
             if j < 0:
                 rem.append(np.nan); nxt.append(np.nan); age.append(np.nan); continue
             ft, tp = by_run[runs[j]]
-            m = (ft > t.values[i]) & (ft <= end[i])
+            m = (ft > tv[i]) & (ft <= end[i])
             rem.append(tp[m].max() if m.any() else np.nan)
-            k = np.argmax(ft > t.values[i]) if (ft > t.values[i]).any() else None
+            k = np.argmax(ft > tv[i]) if (ft > tv[i]).any() else None
             nxt.append(tp[k] if k is not None else np.nan)
-            age.append((t.values[i] - runs[j]) / np.timedelta64(1, "h"))
+            age.append((tv[i] - runs[j]) / np.timedelta64(1, "h"))
         res.append(g.assign(fc_rem=rem, fc_next=nxt, fc_age=age))
     r = pd.concat(res)
     snap = snap.merge(r, on=["series", "date", "hour"], how="left")

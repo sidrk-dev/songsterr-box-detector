@@ -18,7 +18,7 @@ TZ = {"OKC": "America/Chicago", "EWR": "America/New_York", "BOS": "America/New_Y
       "DFW": "America/Chicago", "LAS": "America/Los_Angeles", "MDW": "America/Chicago", "SAT": "America/Chicago",
       "LAX": "America/Los_Angeles", "PHL": "America/New_York", "TTN": "America/New_York", "MSY": "America/Chicago",
       "NYC": "America/New_York", "DCA": "America/New_York", "ATL": "America/New_York"}
-LOWS = {s: (st, TZ[st]) for s, st in json.loads((DATA / "extra_series.json").read_text()).items() if s.startswith("KXLOW")}
+LOWS = {s: (st, TZ[st]) for s, st in json.loads((pathlib.Path(__file__).parent / "models" / "series_stations.json").read_text()).items() if s.startswith("KXLOW")}
 _MIN6 = re.compile(r"\s2([01])(\d{3})\s")
 
 
