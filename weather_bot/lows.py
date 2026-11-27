@@ -160,6 +160,8 @@ if __name__ == "__main__":
         cli["high"] = -cli.high.astype(int)
         snap = dm.build_rows(fr, cli, hours=range(1, 27), rungs=None)
         snap = add_nbm_low(snap, pd.read_parquet(DATA / "nbs.parquet"))
+        from nbm_rem import add_remaining
+        snap = add_remaining(snap, LOWS, negate=True); snap.to_parquet(DATA / "low_snap.parquet")
         rows = expand_rungs(snap); print(rows.shape)
         tr = rows[rows.date < "2026-09-15"]; te = rows[rows.date >= "2026-09-17"]
         m = DailyModel().fit(tr); te = te.assign(p=m.predict(te))

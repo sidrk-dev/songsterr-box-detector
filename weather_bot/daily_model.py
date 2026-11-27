@@ -17,7 +17,8 @@ STD_OFFSET = {"America/Los_Angeles": -8, "America/Phoenix": -7, "America/New_Yor
 STATION_ID = {s: i for i, (s, _) in enumerate(DAILY.values())}
 _MAX6 = re.compile(r"\s1([01])(\d{3})\s")
 FEATS = ["k", "station", "hour", "mx", "cur_minus_mx", "trend1", "trend3", "dewdep", "sky", "wind", "precip",
-         "doy_sin", "doy_cos", "prev_high_minus_mx", "obs_n", "nbm_minus_mx", "k_vs_nbm", "xnd", "nbm_age"]
+         "doy_sin", "doy_cos", "prev_high_minus_mx", "obs_n", "nbm_minus_mx", "k_vs_nbm", "xnd", "nbm_age",
+         "fc_rem_minus_mx", "fc_next_minus_cur", "fc_age", "k_vs_fc"]
 
 
 def parse_all(path=DATA / "daily_metar.csv"):
@@ -112,14 +113,16 @@ def expand_rungs(snap, below=3, around=9):
         v = lo + r
         ok = v <= hi
         s = snap[ok].copy(); vv = v[ok]
-        s["v"] = vv; s["k"] = vv - s.mx; s["k_vs_nbm"] = vv - s.txn; s["y"] = (s.high >= vv).astype(int)
+        s["v"] = vv; s["k"] = vv - s.mx; s["k_vs_nbm"] = vv - s.txn
+        s["k_vs_fc"] = vv - s.fc_rem if "fc_rem" in s else np.nan
+        s["y"] = (s.high >= vv).astype(int)
         parts.append(s)
     return pd.concat(parts, ignore_index=True)
 
 
 class DailyModel:
     def __init__(self):
-        mono = tuple(-1 if f in ("k", "k_vs_nbm") else 0 for f in FEATS)
+        mono = tuple(-1 if f in ("k", "k_vs_nbm", "k_vs_fc") else 0 for f in FEATS)
         self.clf = xgb.XGBClassifier(n_estimators=600, max_depth=6, learning_rate=0.05, subsample=0.8,
                                      colsample_bytree=0.8, min_child_weight=20, tree_method="hist", n_jobs=4,
                                      monotone_constraints=mono, eval_metric="logloss")
